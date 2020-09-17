@@ -17,7 +17,7 @@ generate-%: %/install-config.yaml
 
 start-%: clean-% generate-%
 	@echo Starting $*
-	sudo ./hack/virt-install-aio-ign.sh ./$*/aio.ign $*
+	sudo ./hack/virt-install-aio-ign.sh $*
 
 start: start-cluster1 start-cluster2
 
@@ -28,7 +28,7 @@ network:
 
 ssh-%:
 	chmod 400 ./hack/ssh/key
-	ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ./hack/ssh/key core@api.$*.redhat.com
+	ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ./hack/ssh/key core@api.$*.$(shell grep baseDomain install-config-$*.yaml | cut -d: -f2 | tr -d ' \t')
 
 nodes-%:
 	kubectl --kubeconfig=./$*/auth/kubeconfig get nodes 

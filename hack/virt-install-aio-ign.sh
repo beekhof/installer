@@ -4,16 +4,13 @@ set -x
 # $ mv rhcos-46.82.202007051540-0-qemu.x86_64.qcow2.gz /tmp
 # $ sudo gunzip /tmp/rhcos-46.82.202007051540-0-qemu.x86_64.qcow2.gz
 
+VM_NAME="$1"
 IGNITION_CONFIG="/var/lib/libvirt/images/aio.ign"
-cp "$1" "${IGNITION_CONFIG}"
+cp "${VM_NAME}/aio.ign" "${IGNITION_CONFIG}"
 chown qemu:qemu "${IGNITION_CONFIG}"
 restorecon "${IGNITION_CONFIG}"
 
 RHCOS_IMAGE="/tmp/rhcos-46.82.202007051540-0-qemu.x86_64.qcow2"
-VM_NAME="aio-test"
-if [ ! -z "$2" ]; then
-    VM_NAME="$2"
-fi
 
 OS_VARIANT="rhel8.1"
 RAM_MB="16384"
@@ -47,12 +44,12 @@ while [ 1 = 1 ]; do
     fi 
 done
 
-echo "address=/.${VM_NAME}.redhat.com/${network}.${ip}" > /etc/NetworkManager/dnsmasq.d/${VM_NAME}.conf
+DNS=$(grep baseDomain install-config-${VM_NAME}.yaml | cut -d: -f2 | tr -d ' \t')
+
+echo "address=/.${VM_NAME}.${DNS}/${network}.${ip}" > /etc/NetworkManager/dnsmasq.d/${VM_NAME}.conf
 sudo systemctl reload NetworkManager.service
 
 echo "Installing ${VM_NAME} ( $MAC ) @ ${network}.${ip}"
-echo 
-echo 
 virt-install \
     --connect qemu:///system \
     -n "${VM_NAME}" \
