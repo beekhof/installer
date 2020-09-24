@@ -1,0 +1,231 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aio-cluster
+spec: {}
+status: {}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cluster-secret
+data:
+  authkey:  $AUTHKEY
+  password: cmVkaGF0Cg==
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cluster
+spec:
+  selector:
+    app: aio-pair
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      port: 2224
+      name: pcs
+    - protocol: UDP
+      port: 5404
+      name: corosync1
+    - protocol: UDP
+      port: 5405
+      name: corosync2
+    - protocol: UDP
+      port: 5406
+      name: corosync3
+    - protocol: UDP
+      port: 5407
+      name: corosync4
+    - protocol: UDP
+      port: 5408
+      name: corosync5
+    - protocol: UDP
+      port: 5409
+      name: corosync6
+    - protocol: UDP
+      port: 5410
+      name: corosync7
+    - protocol: UDP
+      port: 5411
+      name: corosync8
+    - protocol: UDP
+      port: 5412
+      name: corosync9
+---
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: aio-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: aio-cluster-role
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aio-cluster-role
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: peer
+  labels:
+    app: aio-pair
+spec:
+  hostname: $NODENAME
+  serviceAccountName: aio-cluster-role
+  volumes:
+  - name: scratch
+    emptyDir: {}
+  - name: cluster-state
+    hostPath:
+      path: /tmp/pcmkdata
+      type: DirectoryOrCreate
+#    emptyDir: {}
+  hostNetwork: true
+#  hostPorts:
+#  - min: 2224
+#    max: 5412
+  hostAliases:
+  - ip: "$NODE1ADDR"
+    hostnames:
+    - "$NODE1NAME"
+  - ip: "$NODE2ADDR"
+    hostnames:
+    - "$NODE2NAME"
+  containers:
+  - name: system
+    image: quay.io/abeekhof/pacemaker
+    command: ["/usr/lib/systemd/systemd", "--system"]
+    volumeMounts:
+    - name: cluster-state
+      mountPath: /var/lib/pcsd
+    - name: cluster-state
+      mountPath: /etc/corosync
+    - name: cluster-state
+      mountPath: /var/lib/pacemaker/cib
+    - name: cluster-state
+      mountPath: /var/lib/pacemaker/pengine
+    securityContext:
+      privileged: true
+  - name: corosync
+    image: quay.io/abeekhof/pacemaker
+    command: [ '/usr/sbin/corosync', '-f']
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: cluster-state
+      mountPath: /etc/corosync
+  - name: pacemaker
+    image: quay.io/abeekhof/pacemaker
+    command: [ '/usr/sbin/pacemakerd', '-f' ]
+    volumeMounts:
+    - name: cluster-state
+      mountPath: /var/lib/pacemaker/cib
+    - name: cluster-state
+      mountPath: /var/lib/pacemaker/pengine
+  - name: debug
+    image: quay.io/abeekhof/pacemaker
+    env:
+    - name: NODE1NAME
+      value: "$NODE1NAME"
+    - name: NODE1ADDR
+      value: "$NODE1ADDR"
+    - name: NODE2NAME
+      value: "$NODE2NAME"
+    - name: NODE2ADDR
+      value: "$NODE2ADDR"
+    - name: CLUSTER_NAME
+      value: "aio-pair"
+    - name: CLUSTER_PASS
+      valueFrom:
+        secretKeyRef:
+          name: cluster-secret
+          key: password
+    - name: CLUSTER_AUTHKEY
+      valueFrom:
+        secretKeyRef:
+          name: cluster-secret
+          key: authkey
+    volumeMounts:
+    - name: cluster-state
+      mountPath: /etc/corosync
+    - name: cluster-state
+      mountPath: /var/lib/pacemaker/cib
+    - name: cluster-state
+      mountPath: /var/lib/pacemaker/pengine
+    securityContext:
+      privileged: true
+  initContainers:
+  - name: cluster-init
+    image: quay.io/abeekhof/pacemaker
+    command: [ '/root/setup.sh']
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: cluster-state
+      mountPath: /etc/corosync
+    - name: cluster-state
+      mountPath: /var/lib/pacemaker/cib
+    - name: cluster-state
+      mountPath: /var/lib/pcsd
+    env:
+    - name: NODE1NAME
+      value: "$NODE1NAME"
+    - name: NODE1ADDR
+      value: "$NODE1ADDR"
+    - name: NODE2NAME
+      value: "$NODE2NAME"
+    - name: NODE2ADDR
+      value: "$NODE2ADDR"
+    - name: CLUSTER_NAME
+      value: "aio-pair"
+    - name: CLUSTER_PASS
+      valueFrom:
+        secretKeyRef:
+          name: cluster-secret
+          key: password
+    - name: CLUSTER_AUTHKEY
+      valueFrom:
+        secretKeyRef:
+          name: cluster-secret
+          key: authkey
+#    - name: BOOTSTRAP_NODE
+#      value: "cluster1.redhat.com"
+#  - name: init-mydb
+#    image: busybox:1.28
+#    command: ['sh', '-c', "until nslookup mydb.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for mydb; sleep 2; done"]
+#  - name: service-init
+#    image: busybox:1.28
+#    command: ['sh', '-c', "for i in {1..100}; do sleep 1; if dig aio-pair; then exit 0; fi; done; exit 1"]
+#    #command: ['sh', '-c', "until nslookup myservice.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+#      runAsUser: 0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  labels:
+    app: nginx
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        ports:
+        - containerPort: 80

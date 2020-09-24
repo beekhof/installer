@@ -50,6 +50,7 @@ echo "address=/.${VM_NAME}.${DNS}/${network}.${ip}" > /etc/NetworkManager/dnsmas
 sudo systemctl reload NetworkManager.service
 
 echo "Installing ${VM_NAME} ( $MAC ) @ ${network}.${ip}"
+
 virt-install \
     --connect qemu:///system \
     -n "${VM_NAME}" \
