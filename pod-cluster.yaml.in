@@ -53,7 +53,6 @@ spec:
       port: 5412
       name: corosync9
 ---
----
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -88,11 +87,7 @@ spec:
     hostPath:
       path: /tmp/pcmkdata
       type: DirectoryOrCreate
-#    emptyDir: {}
   hostNetwork: true
-#  hostPorts:
-#  - min: 2224
-#    max: 5412
   hostAliases:
   - ip: "$NODE1ADDR"
     hostnames:
@@ -197,16 +192,6 @@ spec:
         secretKeyRef:
           name: cluster-secret
           key: authkey
-#    - name: BOOTSTRAP_NODE
-#      value: "cluster1.redhat.com"
-#  - name: init-mydb
-#    image: busybox:1.28
-#    command: ['sh', '-c', "until nslookup mydb.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for mydb; sleep 2; done"]
-#  - name: service-init
-#    image: busybox:1.28
-#    command: ['sh', '-c', "for i in {1..100}; do sleep 1; if dig aio-pair; then exit 0; fi; done; exit 1"]
-#    #command: ['sh', '-c', "until nslookup myservice.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
-#      runAsUser: 0
 ---
 apiVersion: apps/v1
 kind: Deployment
