@@ -8,6 +8,11 @@ cluster: $(CLUSTER_NODES:%=nodes-%) $(CLUSTER_NODES:%=csr-%) $(CLUSTER_NODES:%=l
 
 pcs: $(CLUSTER_NODES:%=pcs-%)
 
+resources:
+	hack/kube.sh cluster1 exec peer -c debug -i -t -- /usr/sbin/pcs resource create nginx k8sDeployment deployment=nginx-deployment args="--insecure-skip-tls-verify -s https://127.0.0.1:6443"
+	hack/kube.sh cluster1 exec peer -c debug -i -t -- /usr/sbin/pcs property set stonith-enabled=false
+
+
 unload: $(CLUSTER_NODES:%=unload-%)
 
 dummy-%:
