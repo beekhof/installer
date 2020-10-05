@@ -1,6 +1,7 @@
 #!/bin/bash
 
 export AUTHKEY=$(cat $1 | base64 | tr -d '\n')
+export FENCEKEY=$(cat /etc/cluster/fence_xvm.key | base64 | tr -d '\n')
 export NODENAME=$2
 
 export NODE1NAME=$3

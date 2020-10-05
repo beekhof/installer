@@ -59,6 +59,9 @@ virt-install \
     --import \
     --network=network:test-net,mac="$MAC" \
     --graphics=none \
+    --noautoconsole \
     --disk "path=${DISK},size=${DISK_GB},backing_store=${RHCOS_IMAGE}" \
     --qemu-commandline="-fw_cfg name=opt/com.coreos/config,file=${IGNITION_CONFIG}"
 
+echo "Waiting 5 minutes for the node to bootstrap"
+sleep 300

@@ -1,19 +1,34 @@
 CLUSTER_NODES=cluster1 cluster2
+KEY=$(shell cat /etc/cluster/fence_xvm.key)
 
 test: $(CLUSTER_NODES:%=dummy-%)
 
 pair: $(CLUSTER_NODES:%=start-%)
+	hack/kube.sh cluster2 get pods -A -w
 
-cluster: $(CLUSTER_NODES:%=nodes-%) $(CLUSTER_NODES:%=csr-%) $(CLUSTER_NODES:%=load-%) pods-cluster2
+prep: $(CLUSTER_NODES:%=nodes-%) $(CLUSTER_NODES:%=csr-%) 
+	hack/kube.sh cluster2 get pods -A -w
+
+cluster: $(CLUSTER_NODES:%=nodes-%) $(CLUSTER_NODES:%=load-%)
+	hack/kube.sh cluster2 get pods -w
 
 pcs: $(CLUSTER_NODES:%=pcs-%)
 
 resources:
-	hack/kube.sh cluster1 exec peer -c debug -i -t -- /usr/sbin/pcs resource create nginx k8sDeployment deployment=nginx-deployment args="--insecure-skip-tls-verify -s https://127.0.0.1:6443"
-	hack/kube.sh cluster1 exec peer -c debug -i -t -- /usr/sbin/pcs property set stonith-enabled=false
+	hack/kube.sh cluster1 exec peer -c debug -i -t -- /usr/sbin/pcs resource create nginx k8sDeployment deployment=nginx-prod args="--insecure-skip-tls-verify -s https://127.0.0.1:6443"
+	hack/kube.sh cluster1 exec peer -c debug -i -t -- /usr/sbin/pcs resource create nginx k8sDeployment deployment=nginx-test args="--insecure-skip-tls-verify -s https://127.0.0.1:6443"
+	hack/kube.sh cluster1 exec peer -c debug -i -t -- sh -c "pcs stonith create virt fence_virt ipport=9123 ipaddr=192.168.126.1 key_file=/etc/pacemaker/xvmkey"
 
+#	hack/kube.sh cluster1 exec peer -c debug -i -t -- /usr/sbin/pcs property set stonith-enabled=false
 
 unload: $(CLUSTER_NODES:%=unload-%)
+
+virt-fencing:
+	sudo yum -y install fence-virtd fence-virtd-multicast fence-virtd-tcp fence-virtd-libvirt
+	sudo mkdir -p /etc/cluster/
+	sudo bash -c "md5sum /root/anaconda-ks.cfg | awk '{print $$1}'  > /etc/cluster/fence_xvm.key"
+	sudo systemctl enable fence_virtd
+	sudo systemctl start fence_virtd
 
 dummy-%:
 	@echo foo-$*
@@ -60,9 +75,6 @@ ssh-%:
 
 nodes-%:
 	hack/kube.sh $* get nodes 
-
-pods-%:
-	hack/kube.sh $* get pods -w
 
 csr-%:
 	hack/approve-crs.sh $*

@@ -1,17 +1,29 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: aio-cluster
-spec: {}
-status: {}
----
-apiVersion: v1
 kind: Secret
 metadata:
-  name: cluster-secret
+  name: cluster-secrets
 data:
   authkey:  $AUTHKEY
+  fencekey: ODc1MWNmZDdhNTZkOWM2YjM0NTZjZjg3MzI0MjA4NGMK
   password: cmVkaGF0Cg==
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: aio-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: aio-cluster-role
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aio-cluster-role
 ---
 apiVersion: v1
 kind: Service
@@ -53,24 +65,6 @@ spec:
       port: 5412
       name: corosync9
 ---
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: aio-cluster-role
-subjects:
-- kind: ServiceAccount
-  name: aio-cluster-role
-  namespace: default
-roleRef:
-  kind: ClusterRole
-  name: cluster-admin
-  apiGroup: rbac.authorization.k8s.io
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: aio-cluster-role
----
 apiVersion: v1
 kind: Pod
 metadata:
@@ -83,6 +77,9 @@ spec:
   volumes:
   - name: scratch
     emptyDir: {}
+  - name: secret-volume
+    secret:
+      secretName: cluster-secrets
   - name: cluster-state
     hostPath:
       path: /tmp/pcmkdata
@@ -105,9 +102,7 @@ spec:
     - name: cluster-state
       mountPath: /etc/corosync
     - name: cluster-state
-      mountPath: /var/lib/pacemaker/cib
-    - name: cluster-state
-      mountPath: /var/lib/pacemaker/pengine
+      mountPath: /var/lib/pacemaker
     securityContext:
       privileged: true
   - name: corosync
@@ -123,43 +118,11 @@ spec:
     command: [ '/usr/sbin/pacemakerd', '-f' ]
     volumeMounts:
     - name: cluster-state
-      mountPath: /var/lib/pacemaker/cib
+      mountPath: /etc/pacemaker
     - name: cluster-state
-      mountPath: /var/lib/pacemaker/pengine
-  - name: debug
-    image: quay.io/abeekhof/pacemaker
-    env:
-    - name: NODE1NAME
-      value: "$NODE1NAME"
-    - name: NODE1ADDR
-      value: "$NODE1ADDR"
-    - name: NODE2NAME
-      value: "$NODE2NAME"
-    - name: NODE2ADDR
-      value: "$NODE2ADDR"
-    - name: CLUSTER_NAME
-      value: "aio-pair"
-    - name: CLUSTER_PASS
-      valueFrom:
-        secretKeyRef:
-          name: cluster-secret
-          key: password
-    - name: CLUSTER_AUTHKEY
-      valueFrom:
-        secretKeyRef:
-          name: cluster-secret
-          key: authkey
-    volumeMounts:
-    - name: cluster-state
-      mountPath: /etc/corosync
-    - name: cluster-state
-      mountPath: /var/lib/pacemaker/cib
-    - name: cluster-state
-      mountPath: /var/lib/pacemaker/pengine
-    securityContext:
-      privileged: true
+      mountPath: /var/lib/pacemaker
   initContainers:
-  - name: cluster-init
+  - name: init
     image: quay.io/abeekhof/pacemaker
     command: [ '/root/setup.sh']
     securityContext:
@@ -168,9 +131,14 @@ spec:
     - name: cluster-state
       mountPath: /etc/corosync
     - name: cluster-state
-      mountPath: /var/lib/pacemaker/cib
+      mountPath: /etc/pacemaker
+    - name: cluster-state
+      mountPath: /var/lib/pacemaker
     - name: cluster-state
       mountPath: /var/lib/pcsd
+    - name: secret-volume
+      readOnly: true
+      mountPath: "/etc/secret-volume"
     env:
     - name: NODE1NAME
       value: "$NODE1NAME"
@@ -182,21 +150,33 @@ spec:
       value: "$NODE2ADDR"
     - name: CLUSTER_NAME
       value: "aio-pair"
-    - name: CLUSTER_PASS
-      valueFrom:
-        secretKeyRef:
-          name: cluster-secret
-          key: password
-    - name: CLUSTER_AUTHKEY
-      valueFrom:
-        secretKeyRef:
-          name: cluster-secret
-          key: authkey
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx-deployment
+  name: nginx-prod
+  labels:
+    app: nginx
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        ports:
+        - containerPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-test
   labels:
     app: nginx
 spec:
